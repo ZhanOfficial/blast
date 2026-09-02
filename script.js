@@ -1,43 +1,30 @@
 // ============================================
-// ZhanOfficial — Block Blast Engine v1.0
+// ZhanOfficial — Block Blast DnD Engine v2.1
+// Premium UI Edition
 // ============================================
 
-// ----- Game State -----
 const GRID_SIZE = 8;
 let grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
 let score = 0;
 let selectedBlockIndex = null;
+let isDragging = false;
+let ghostRow = -1;
+let ghostCol = -1;
+let ghostValid = false;
 
-// Predefined block shapes (each is a 2D array)
 const BLOCK_SHAPES = [
-    // I-shape (4x1)
     [[1, 1, 1, 1]],
-    // Square (2x2)
-    [[1, 1],
-     [1, 1]],
-    // L-shape (3x2)
-    [[1, 0],
-     [1, 0],
-     [1, 1]],
-    // T-shape (3x3)
-    [[0, 1, 0],
-     [1, 1, 1]],
-    // Z-shape (3x3)
-    [[1, 1, 0],
-     [0, 1, 1]],
-    // Small L (2x2)
-    [[1, 0],
-     [1, 1]],
-    // Line 3
+    [[1, 1], [1, 1]],
+    [[1, 0], [1, 0], [1, 1]],
+    [[0, 1, 0], [1, 1, 1]],
+    [[1, 1, 0], [0, 1, 1]],
+    [[1, 0], [1, 1]],
     [[1, 1, 1]],
-    // Dot
     [[1]]
 ];
 
-// Current block options (3 random shapes)
 let currentBlocks = [];
 
-// ----- DOM References -----
 const gridEl = document.getElementById('grid');
 const inventoryEl = document.getElementById('inventory');
 const scoreDisplay = document.getElementById('score-display');
@@ -46,8 +33,7 @@ const resetBtn = document.getElementById('reset-btn');
 
 // ----- Helper Functions -----
 function getRandomShape() {
-    const idx = Math.floor(Math.random() * BLOCK_SHAPES.length);
-    return BLOCK_SHAPES[idx].map(row => [...row]);
+    return BLOCK_SHAPES[Math.floor(Math.random() * BLOCK_SHAPES.length)].map(row => [...row]);
 }
 
 function generateBlocks() {
@@ -63,10 +49,27 @@ function renderGrid() {
     for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
             const cell = document.createElement('div');
-            cell.className = 'cell' + (grid[r][c] ? ' filled' : '');
+            cell.className = 'cell';
+            if (grid[r][c]) cell.classList.add('filled');
+            
+            if (ghostRow !== -1 && ghostCol !== -1 && selectedBlockIndex !== null) {
+                const shape = currentBlocks[selectedBlockIndex];
+                for (let sr = 0; sr < shape.length; sr++) {
+                    for (let sc = 0; sc < shape[0].length; sc++) {
+                        if (shape[sr][sc]) {
+                            const gr = ghostRow + sr;
+                            const gc = ghostCol + sc;
+                            if (gr === r && gc === c && !grid[r][c]) {
+                                cell.classList.add('ghost');
+                                cell.classList.add(ghostValid ? 'ghost-valid' : 'ghost-invalid');
+                            }
+                        }
+                    }
+                }
+            }
+            
             cell.dataset.row = r;
             cell.dataset.col = c;
-            cell.addEventListener('click', () => handleCellClick(r, c));
             gridEl.appendChild(cell);
         }
     }
@@ -77,18 +80,18 @@ function renderInventory() {
     inventoryEl.innerHTML = '';
     currentBlocks.forEach((shape, idx) => {
         const wrapper = document.createElement('div');
-        wrapper.className = 'block-option' + (selectedBlockIndex === idx ? ' selected' : '');
-        wrapper.dataset.index = idx;
+        wrapper.className = 'block-option';
+        wrapper.draggable = true;
+        wrapper.addEventListener('dragstart', (e) => handleDragStart(e, idx));
+        wrapper.addEventListener('dragend', handleDragEnd);
 
         const preview = document.createElement('div');
         preview.className = 'block-preview';
-        const rows = shape.length;
-        const cols = shape[0].length;
-        preview.style.gridTemplateColumns = `repeat(${cols}, 28px)`;
-        preview.style.gridTemplateRows = `repeat(${rows}, 28px)`;
+        preview.style.gridTemplateColumns = `repeat(${shape[0].length}, 34px)`;
+        preview.style.gridTemplateRows = `repeat(${shape.length}, 34px)`;
 
-        for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
+        for (let r = 0; r < shape.length; r++) {
+            for (let c = 0; c < shape[0].length; c++) {
                 const cell = document.createElement('div');
                 cell.className = 'preview-cell' + (shape[r][c] ? ' filled' : '');
                 preview.appendChild(cell);
@@ -96,160 +99,203 @@ function renderInventory() {
         }
 
         wrapper.appendChild(preview);
-        wrapper.addEventListener('click', () => selectBlock(idx));
         inventoryEl.appendChild(wrapper);
     });
 }
 
-// ----- Select Block -----
-function selectBlock(index) {
-    if (selectedBlockIndex === index) {
-        selectedBlockIndex = null;
-        statusMsg.textContent = 'Block deselected.';
-    } else {
-        selectedBlockIndex = index;
-        statusMsg.textContent = `Block ${index+1} selected. Click grid to place.`;
+// ----- Drag Handlers -----
+function handleDragStart(e, idx) {
+    selectedBlockIndex = idx;
+    isDragging = true;
+    ghostRow = -1;
+    ghostCol = -1;
+    
+    const shape = currentBlocks[idx];
+    e.dataTransfer.setData('text/plain', JSON.stringify({ index: idx, shape }));
+    e.dataTransfer.effectAllowed = 'move';
+    
+    const dragGhost = document.createElement('div');
+    dragGhost.style.display = 'grid';
+    dragGhost.style.gap = '3px';
+    dragGhost.style.padding = '8px';
+    dragGhost.style.background = 'rgba(78, 205, 196, 0.15)';
+    dragGhost.style.borderRadius = '12px';
+    dragGhost.style.border = '2px solid #4ecdc4';
+    dragGhost.style.gridTemplateColumns = `repeat(${shape[0].length}, 32px)`;
+    dragGhost.style.gridTemplateRows = `repeat(${shape.length}, 32px)`;
+    
+    for (let r = 0; r < shape.length; r++) {
+        for (let c = 0; c < shape[0].length; c++) {
+            const cell = document.createElement('div');
+            cell.style.width = '32px';
+            cell.style.height = '32px';
+            cell.style.background = shape[r][c] ? '#4ecdc4' : 'transparent';
+            cell.style.borderRadius = '6px';
+            cell.style.border = shape[r][c] ? '1px solid #6ee7de' : 'none';
+            dragGhost.appendChild(cell);
+        }
     }
-    renderInventory();
+    
+    document.body.appendChild(dragGhost);
+    e.dataTransfer.setDragImage(dragGhost, 20, 20);
+    setTimeout(() => document.body.removeChild(dragGhost), 0);
+    
+    setStatus('🔷 Dragging block...', '');
 }
 
-// ----- Place Block on Grid -----
-function handleCellClick(row, col) {
-    if (selectedBlockIndex === null) {
-        statusMsg.textContent = '⚠️ Select a block first!';
-        return;
-    }
-
-    const shape = currentBlocks[selectedBlockIndex];
-    const rows = shape.length;
-    const cols = shape[0].length;
-
-    // Check if block fits at (row, col) — top-left anchor
-    for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-            if (shape[r][c]) {
-                const nr = row + r;
-                const nc = col + c;
-                if (nr >= GRID_SIZE || nc >= GRID_SIZE || grid[nr][nc] === 1) {
-                    statusMsg.textContent = '❌ Can\'t place there!';
-                    return;
-                }
-            }
-        }
-    }
-
-    // Place the block
-    for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-            if (shape[r][c]) {
-                grid[row + r][col + c] = 1;
-            }
-        }
-    }
-
-    // Clear filled lines
-    clearLines();
-
-    // Remove the used block
-    currentBlocks.splice(selectedBlockIndex, 1);
-    selectedBlockIndex = null;
-
-    // If no blocks left, generate new ones
-    if (currentBlocks.length === 0) {
-        generateBlocks();
-    }
-
-    // Check if game over
-    if (!hasValidMoves()) {
-        statusMsg.textContent = '💀 GAME OVER! No moves left. Hit New Game.';
-        // disable placement? we'll let reset handle it
-    } else {
-        statusMsg.textContent = '✅ Block placed! Keep going.';
-    }
-
+function handleDragEnd(e) {
+    isDragging = false;
+    ghostRow = -1;
+    ghostCol = -1;
+    ghostValid = false;
     updateUI();
 }
 
-// ----- Clear Full Lines -----
-function clearLines() {
-    let linesCleared = 0;
-    // Check rows
-    for (let r = GRID_SIZE - 1; r >= 0; r--) {
-        if (grid[r].every(cell => cell === 1)) {
-            grid.splice(r, 1);
-            grid.unshift(Array(GRID_SIZE).fill(0));
-            linesCleared++;
-            r++; // re-check same row index
+// ----- Grid Drop -----
+gridEl.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (selectedBlockIndex === null || !currentBlocks[selectedBlockIndex]) return;
+    
+    const rect = gridEl.getBoundingClientRect();
+    const cellSize = 52 + 5;
+    const col = Math.floor((e.clientX - rect.left) / cellSize);
+    const row = Math.floor((e.clientY - rect.top) / cellSize);
+    
+    const shape = currentBlocks[selectedBlockIndex];
+    const rows = shape.length;
+    const cols = shape[0].length;
+    
+    ghostRow = Math.max(0, Math.min(GRID_SIZE - rows, row - Math.floor(rows / 2)));
+    ghostCol = Math.max(0, Math.min(GRID_SIZE - cols, col - Math.floor(cols / 2)));
+    ghostValid = canPlaceBlock(selectedBlockIndex, ghostRow, ghostCol);
+    
+    updateUI();
+});
+
+gridEl.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (selectedBlockIndex === null) {
+        setStatus('⚠️ Select a block first!', 'error');
+        return;
+    }
+    if (ghostRow === -1 || ghostCol === -1) {
+        setStatus('❌ Drop on the grid, bro!', 'error');
+        return;
+    }
+    if (!ghostValid) {
+        setStatus('❌ Can\'t place there!', 'error');
+        ghostRow = -1;
+        ghostCol = -1;
+        updateUI();
+        return;
+    }
+    
+    placeBlock(selectedBlockIndex, ghostRow, ghostCol);
+    clearLines();
+    currentBlocks.splice(selectedBlockIndex, 1);
+    selectedBlockIndex = null;
+    ghostRow = -1;
+    ghostCol = -1;
+    ghostValid = false;
+    
+    if (currentBlocks.length === 0) generateBlocks();
+    if (!hasValidMoves()) {
+        setStatus('💀 GAME OVER! No moves left. 🔄 New Game?', 'gameover');
+    } else {
+        setStatus('✅ Block placed! Keep going! 🎯', 'success');
+    }
+    updateUI();
+});
+
+// ----- Core Logic -----
+function canPlaceBlock(index, row, col) {
+    const shape = currentBlocks[index];
+    for (let r = 0; r < shape.length; r++) {
+        for (let c = 0; c < shape[0].length; c++) {
+            if (shape[r][c]) {
+                const nr = row + r, nc = col + c;
+                if (nr >= GRID_SIZE || nc >= GRID_SIZE || grid[nr][nc]) return false;
+            }
         }
     }
+    return true;
+}
 
-    // Check columns
-    for (let c = GRID_SIZE - 1; c >= 0; c--) {
-        let full = true;
-        for (let r = 0; r < GRID_SIZE; r++) {
-            if (grid[r][c] === 0) { full = false; break; }
+function placeBlock(index, row, col) {
+    const shape = currentBlocks[index];
+    for (let r = 0; r < shape.length; r++) {
+        for (let c = 0; c < shape[0].length; c++) {
+            if (shape[r][c]) grid[row + r][col + c] = 1;
         }
-        if (full) {
+    }
+}
+
+function clearLines() {
+    let cleared = 0;
+    for (let r = GRID_SIZE - 1; r >= 0; r--) {
+        if (grid[r].every(c => c)) {
+            grid.splice(r, 1);
+            grid.unshift(Array(GRID_SIZE).fill(0));
+            cleared++;
+            r++;
+        }
+    }
+    for (let c = GRID_SIZE - 1; c >= 0; c--) {
+        if (grid.every(row => row[c])) {
             for (let r = 0; r < GRID_SIZE; r++) {
                 grid[r].splice(c, 1);
                 grid[r].push(0);
             }
-            linesCleared++;
-            c++; // re-check same column
+            cleared++;
+            c++;
         }
     }
-
-    if (linesCleared > 0) {
-        const points = linesCleared * 10 + (linesCleared > 1 ? (linesCleared - 1) * 15 : 0);
+    if (cleared > 0) {
+        const points = cleared * 10 + (cleared > 1 ? (cleared - 1) * 15 : 0);
         score += points;
-        statusMsg.textContent = `🎉 Cleared ${linesCleared} lines! +${points} pts`;
+        setStatus(`🎉 Cleared ${cleared} lines! +${points} pts`, 'success');
     }
 }
 
-// ----- Check Valid Moves -----
 function hasValidMoves() {
     for (let bi = 0; bi < currentBlocks.length; bi++) {
         const shape = currentBlocks[bi];
-        const rows = shape.length;
-        const cols = shape[0].length;
-        for (let r = 0; r <= GRID_SIZE - rows; r++) {
-            for (let c = 0; c <= GRID_SIZE - cols; c++) {
-                let fits = true;
-                for (let sr = 0; sr < rows; sr++) {
-                    for (let sc = 0; sc < cols; sc++) {
-                        if (shape[sr][sc] && grid[r + sr][c + sc] === 1) {
-                            fits = false;
-                            break;
-                        }
-                    }
-                    if (!fits) break;
-                }
-                if (fits) return true;
+        for (let r = 0; r <= GRID_SIZE - shape.length; r++) {
+            for (let c = 0; c <= GRID_SIZE - shape[0].length; c++) {
+                if (canPlaceBlock(bi, r, c)) return true;
             }
         }
     }
     return false;
 }
 
-// ----- Update UI -----
+// ----- UI Helpers -----
+function setStatus(msg, type = '') {
+    statusMsg.textContent = msg;
+    statusMsg.className = type;
+}
+
 function updateUI() {
     renderGrid();
     renderInventory();
     scoreDisplay.textContent = score;
 }
 
-// ----- Reset Game -----
 function resetGame() {
     grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
     score = 0;
     selectedBlockIndex = null;
+    ghostRow = -1;
+    ghostCol = -1;
+    ghostValid = false;
     generateBlocks();
-    statusMsg.textContent = '🔄 New game! Place your blocks.';
+    setStatus('🔄 New game! Drag blocks to the grid.', '');
     updateUI();
 }
 
 // ----- Init -----
 generateBlocks();
 updateUI();
-statusMsg.textContent = '🎯 Select a block, then click the grid!';
+setStatus('🎯 Drag a block from inventory to the grid!', '');
 resetBtn.addEventListener('click', resetGame);

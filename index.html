@@ -2,38 +2,44 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Block Blast — ZhanOfficial Edition</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Block Blast — ZhanOfficial</title>
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <div id="game-container">
+    <div id="app">
+        <!-- Header -->
         <div id="header">
             <h1>🧱 BLOCK BLAST</h1>
-            <div id="score-container">
-                <span>Score: </span>
+            <div id="score-box">
+                <span class="score-label">Score</span>
                 <span id="score-display">0</span>
             </div>
             <button id="reset-btn">🔄 New Game</button>
         </div>
 
-        <div id="main-area">
+        <!-- Main Game Area -->
+        <div id="game-area">
             <!-- Grid Board -->
-            <div id="board-container">
-                <div id="grid"></div>
+            <div id="board-wrapper">
+                <div id="grid-container">
+                    <div id="grid"></div>
+                </div>
             </div>
 
-            <!-- Block Inventory -->
-            <div id="inventory-container">
-                <h3>Blocks</h3>
-                <div id="inventory">
-                    <!-- 3 block shapes will be rendered here -->
+            <!-- Side Panel -->
+            <div id="side-panel">
+                <div id="blocks-section">
+                    <h3>Blocks</h3>
+                    <div id="inventory"></div>
                 </div>
-                <p id="status-msg">Place blocks to clear lines!</p>
+                <div id="status-section">
+                    <div id="status-msg">🎯 Drag a block to the grid!</div>
+                </div>
             </div>
         </div>
     </div>
 
     <script src="script.js"></script>
 </body>
-</html>
+                </html>

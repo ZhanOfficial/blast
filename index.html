@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Block Blast — ZhanOfficial Edition</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div id="game-container">
+        <div id="header">
+            <h1>🧱 BLOCK BLAST</h1>
+            <div id="score-container">
+                <span>Score: </span>
+                <span id="score-display">0</span>
+            </div>
+            <button id="reset-btn">🔄 New Game</button>
+        </div>
+
+        <div id="main-area">
+            <!-- Grid Board -->
+            <div id="board-container">
+                <div id="grid"></div>
+            </div>
+
+            <!-- Block Inventory -->
+            <div id="inventory-container">
+                <h3>Blocks</h3>
+                <div id="inventory">
+                    <!-- 3 block shapes will be rendered here -->
+                </div>
+                <p id="status-msg">Place blocks to clear lines!</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
